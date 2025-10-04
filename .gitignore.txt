@@ -1,0 +1,13 @@
+# Paper server files
+logs/
+world/
+world_nether/
+world_the_end/
+*.log
+*.lock
+*.jar.original
+plugins/   # optional: only include your own plugin jars, not Movecraft etc.
+
+# OS files
+.DS_Store
+Thumbs.db
