@@ -1,5 +1,5 @@
 # Ignore Paper server jar
-paper-*.jar
+paper-1.21.8-60.jar
 
 # Paper server files
 logs/
