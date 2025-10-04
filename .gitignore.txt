@@ -1,3 +1,6 @@
+# Ignore Paper server jar
+paper-*.jar
+
 # Paper server files
 logs/
 world/
