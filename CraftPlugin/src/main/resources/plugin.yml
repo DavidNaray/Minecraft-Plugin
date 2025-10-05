@@ -6,3 +6,12 @@ commands:
   detectcraft:
     description: Detects a craft from the block you look at
     usage: /<command>
+  registercraft:
+    description: Register the craft you are looking at
+    usage: /<command> <name>
+  spawnclone:
+    description: spawns a block version of the craft
+    usage: /<command> <name>
+  spawnentityclone:
+    description: spawns a entity version of the craft
+    usage: /<command> <name>
