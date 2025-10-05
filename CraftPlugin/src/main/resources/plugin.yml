@@ -2,3 +2,7 @@ name: CraftPlugin
 main: com.David.CraftPlugin
 version: 1.0
 api-version: 1.21
+commands:
+  detectcraft:
+    description: Detects a craft from the block you look at
+    usage: /<command>
