@@ -15,3 +15,6 @@ commands:
   spawnentityclone:
     description: spawns a entity version of the craft
     usage: /<command> <name>
+  pilot:
+    description: pilot the craft
+    usage: /pilot

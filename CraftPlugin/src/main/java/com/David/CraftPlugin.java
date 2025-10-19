@@ -1,19 +1,28 @@
 package com.David;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.World;
 
 import org.bukkit.block.data.BlockData;
-import org.bukkit.entity.BlockDisplay;
-import org.bukkit.entity.EntityType;
+import org.bukkit.util.Transformation;
+import org.bukkit.util.Vector;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.*;
+//import java.util.Vector;
 
 public class CraftPlugin extends JavaPlugin {
 
@@ -21,15 +30,27 @@ public class CraftPlugin extends JavaPlugin {
     private final Set<Material> allowedBlocks = Set.of(
             Material.OAK_PLANKS,
             Material.WHITE_WOOL,
-            Material.SPRUCE_PLANKS
+            Material.SPRUCE_PLANKS,
+
+            Material.OAK_SIGN,
+            Material.OAK_WALL_SIGN,
+            Material.BIRCH_SIGN,
+            Material.BIRCH_WALL_SIGN,
+            Material.SPRUCE_SIGN,
+            Material.SPRUCE_WALL_SIGN,
+            Material.DARK_OAK_SIGN,
+            Material.DARK_OAK_WALL_SIGN
     );
     private final Material separatorBlock = Material.COBBLESTONE;
     private final Map<String, CraftTemplate> templates = new HashMap<>();
     private final int maxSize = 5000;
     private final int minSize = 10;
+    private final Map<UUID, CraftInstance> activeCrafts = new HashMap<>();
 
     @Override
     public void onEnable() {
+        CraftInstance demoCraft = new CraftInstance(getServer().getWorlds().get(0), new Location(getServer().getWorlds().get(0), 0, 100, 0));
+        this.getCommand("pilot").setExecutor(new PilotCommand(this, demoCraft));
         getLogger().info("CraftPlugin enabled!");
     }
 
@@ -89,7 +110,7 @@ public class CraftPlugin extends JavaPlugin {
                 player.sendMessage("No block in sight!");
                 return true;
             }
-
+            CraftTemplate template = new CraftTemplate(craftName);
             // Step 1: detect blocks with flood fill
             Set<Block> detected = floodFill(target);
 
@@ -99,7 +120,7 @@ public class CraftPlugin extends JavaPlugin {
             }
 
             // Step 2: normalize into CraftTemplate
-            CraftTemplate template = new CraftTemplate(craftName);
+
             int baseX = target.getX();
             int baseY = target.getY();
             int baseZ = target.getZ();
@@ -109,6 +130,29 @@ public class CraftPlugin extends JavaPlugin {
                 int relY = b.getY() - baseY;
                 int relZ = b.getZ() - baseZ;
                 template.addBlock(relX, relY, relZ, b.getType());
+
+                if (b.getState() instanceof Sign sign) {
+                    for (String line : sign.getLines()) {
+                        if (line.equalsIgnoreCase("[LEFT]") ||
+                                line.equalsIgnoreCase("[RIGHT]") ||
+                                line.equalsIgnoreCase("[FORWARD]") ||
+                                line.equalsIgnoreCase("[BACK]")) {
+
+                            // relative position from start
+                            Vector rel=new Vector(relX,relY,relZ);
+//                            rel.add(relX);
+//                            rel.add(relY);
+//                            rel.add(relZ);
+
+                            String clean = line.replace("[", "").replace("]", "").toLowerCase();
+                            template.addControlSign(new ControlSign(rel, clean));
+//                            template.addControlSign(new ControlSign(rel, line.replace("[", "").replace("]", "")));
+                            player.sendMessage("Registered control sign: " + clean + " at " + rel);
+                        }
+                    }
+                }
+
+
             }
 
             // Step 3: store template
@@ -201,6 +245,7 @@ public class CraftPlugin extends JavaPlugin {
         while (!toVisit.isEmpty()) {
             Block current = toVisit.poll();
 
+
             if (!allowedBlocks.contains(current.getType())) continue; // only allowed blocks
             if (visited.contains(current)) continue; // already done
             if (current.getType() == separatorBlock) continue; // separators stop the fill
@@ -279,26 +324,57 @@ public class CraftPlugin extends JavaPlugin {
 
     private void spawnEntityClone(Player player, CraftTemplate template, Location base) {
         World world = player.getWorld();
+        CraftInstance instance = new CraftInstance(world, base.clone());
+        activeCrafts.put(player.getUniqueId(), instance);
 
         for (Map.Entry<String, Material> e : template.getBlocks().entrySet()) {
+            Material mat = e.getValue();
+            if (mat.name().endsWith("_SIGN")) continue;
+
             String[] parts = e.getKey().split(",");
             int rx = Integer.parseInt(parts[0]);
             int ry = Integer.parseInt(parts[1]);
             int rz = Integer.parseInt(parts[2]);
 
             Location loc = base.clone().add(rx, ry, rz);
-            // spawn BlockDisplay
             BlockDisplay display = (BlockDisplay) world.spawnEntity(loc, EntityType.BLOCK_DISPLAY);
-            BlockData bd = e.getValue().createBlockData();
-            display.setBlock(bd);
+            display.setBlock(e.getValue().createBlockData());
+            display.setInterpolationDelay(0);
+            display.setInterpolationDuration(1);
 
-            // optional settings to make them stable / immediate
-            try {
-                display.setInterpolationDelay(0);
-                display.setInterpolationDuration(1);
-            } catch (Throwable ignored) {
-                // older API versions might not have those setters; ignore safely
-            }
+            instance.addPart(display);
+
+
+        }
+        // Check if this block position matches a control sign
+        for (ControlSign sign : template.getControlSigns()) {
+            Location textLoc = base.clone().add(sign.getRelativePos())
+                    .add(0.5, 0.5, 0.5);     // center in block
+//                    .add(0, 0, 0.25);       // offset slightly outwards
+
+            TextDisplay text = (TextDisplay) world.spawnEntity(textLoc, EntityType.TEXT_DISPLAY);
+            text.text(Component.text("[" + sign.getCommand().toUpperCase() + "]")
+                    .color(NamedTextColor.GOLD)
+                    .decorate(TextDecoration.BOLD));
+            text.setBillboard(Display.Billboard.CENTER);  // double-sided
+            text.setShadowed(true);
+            text.setBrightness(new Display.Brightness(15, 15));
+            text.setViewRange(16f);
+
+            // ✅ Solid background (opaque)
+            text.setBackgroundColor(Color.fromARGB(255, 240, 220, 180)); // wood-like sign color
+            text.setLineWidth(80); // controls wrap and scale
+            text.setAlignment(TextDisplay.TextAlignment.CENTER);
+
+            text.setTransformation(new Transformation(
+                    new Vector3f(0f, 0f, 0f),
+                    new Quaternionf(),
+                    new Vector3f(0.8f, 0.8f, 0.8f),
+                    new Quaternionf()
+            ));
+
+            instance.addControlSign(sign);
         }
     }
+
 }

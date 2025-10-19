@@ -8,10 +8,19 @@ public class CraftTemplate {
 
     private final String name;
     private final Map<String, Material> blocks; // relative coords -> material
+    private List<ControlSign> controlSigns = new ArrayList<>();
 
     public CraftTemplate(String name) {
         this.name = name;
         this.blocks = new HashMap<>();
+    }
+
+    public void addControlSign(ControlSign sign) {
+        controlSigns.add(sign);
+    }
+
+    public List<ControlSign> getControlSigns() {
+        return controlSigns;
     }
 
     public String getName() {
